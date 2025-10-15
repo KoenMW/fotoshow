@@ -1,27 +1,37 @@
-# Simple root-level Dockerfile for running the Quarkus app in JVM mode
-# Build the application first:
-#   ./gradlew build -Dquarkus.package.type=fast-jar
-# Then build the image:
-#   docker build -t simpleslideshow:latest .
-# And run it (exposes 18181 as configured in application.properties):
-#   docker run --rm -p 18181:18181 simpleslideshow:latest
+# ==========================
+# 1️⃣ Build Stage - Maven
+# ==========================
+FROM maven:3.9.9-eclipse-temurin-21 AS build
 
+# Set working directory inside the build container
+WORKDIR /build
+
+# Copy pom.xml and download dependencies first (for better caching)
+COPY pom.xml .
+COPY src ./src
+
+# Build the project using Maven (use fast-jar packaging for Quarkus)
+RUN mvn clean package -DskipTests -Dquarkus.package.type=fast-jar
+
+# ==========================
+# 2️⃣ Runtime Stage - JRE only
+# ==========================
 FROM eclipse-temurin:21-jre-alpine
 
 ENV LANGUAGE="en_US:en"
 WORKDIR /work/
 
-# Copy the quarkus fast-jar layout produced by Gradle into the image
-COPY build/quarkus-app/lib/ /work/lib/
-COPY build/quarkus-app/*.jar /work/
-COPY build/quarkus-app/app/ /work/app/
-COPY build/quarkus-app/quarkus/ /work/quarkus/
+# Copy Quarkus fast-jar output from the Maven build stage
+COPY --from=build /build/target/quarkus-app/lib/ /work/lib/
+COPY --from=build /build/target/quarkus-app/*.jar /work/
+COPY --from=build /build/target/quarkus-app/app/ /work/app/
+COPY --from=build /build/target/quarkus-app/quarkus/ /work/quarkus/
 
-# Quarkus app port
+# Expose the Quarkus port (as configured)
 EXPOSE 18181
 
-# Ensure Quarkus binds to all interfaces inside the container
+# Set Quarkus runtime options
 ENV JAVA_OPTS="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
 
-# Run the application
+# Run the Quarkus app
 ENTRYPOINT ["java","-jar","/work/quarkus-run.jar"]

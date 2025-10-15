@@ -1,0 +1,7 @@
+services:
+  fotoshow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports: 
+      - "18181:18181"
